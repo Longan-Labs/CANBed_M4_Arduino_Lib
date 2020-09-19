@@ -40,8 +40,7 @@ void setup()
         Serial.println("Error Initializing CAN...");
     }
 }
-```
-```
+
 void loop()
 {
     uint8_t ret;
