@@ -1,0 +1,10 @@
+*~ 
+build/
+.vscode/
+*.tmp
+*.hex
+toolchain/
+*.o
+*.orig
+*.old
+

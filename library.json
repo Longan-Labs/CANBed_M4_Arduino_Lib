@@ -1,0 +1,40 @@
+{
+    "name": "SAME51_CAN",
+    "keywords": "same51 can",
+    "description": "This library provides connection to a CAN bus from an Atmel SAME51",
+    "authors":
+    {
+        "name": "Deezums Deezings",
+        "url": "https://github.com/deezums"
+    },
+    "version":     "0.1.0",
+    "downloadUrl": "https://github.com/deezums/same51_can",
+    "frameworks": "arduino",
+    "platforms": ["atmelsam"],
+    "dependencies":
+    [
+    ],
+    "export": {
+        "include":
+        [
+            "examples/*",
+            "src/*",
+            "library.json",
+            "library.properties",
+            "README.md"
+        ],
+        "exclude":
+        [
+            "testcode",
+            "Makefile",
+            "test"
+        ]
+    },
+        "build": {
+        "flags": [
+            "-Wall", "-Werror", "-Wformat-nonliteral",
+            "-Wpointer-arith", "-Wmissing-declarations", "-Winline", 
+            "-Wwrite-strings", "-Wno-unused-parameter", "-Wfloat-equal"
+        ]
+    }
+}
