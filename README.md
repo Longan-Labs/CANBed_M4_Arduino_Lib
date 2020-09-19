@@ -25,7 +25,7 @@ Bossa does not support SAME51, variant available here
 https://github.com/deezums/BOSSA
 
 Using the Library
-
+```
 #include <same51_can.h>
 
 SAME51_CAN can(0);
@@ -40,7 +40,8 @@ void setup()
         Serial.println("Error Initializing CAN...");
     }
 }
-
+```
+```
 void loop()
 {
     uint8_t ret;
@@ -62,7 +63,7 @@ void loop()
         Serial.println("");
     }
 }
-
+```
 
 
 License
