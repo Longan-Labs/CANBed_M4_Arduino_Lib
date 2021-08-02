@@ -50,11 +50,14 @@ Atmel's SAMC21 register definition include files have a different and peculiar s
  *----------------------------------------------------------------------------*/
 #include <sam.h>
 #include <stdbool.h>
-
+#include <Arduino.h>
 #include "mcan.h"
 //#include "pmc.h"
 
 #define __SYSTEM_CLOCK (48000000)
+
+#define DIV_ROUND(a, b) (((a) + (b) / 2) / (b))
+#define DIV_ROUND_UP(a, b) (((a) + (b)-1) / (b))
 
 #define pmc_get_gck_clock(id) __SYSTEM_CLOCK
 
@@ -251,11 +254,24 @@ uint8_t mcan_initialize(struct mcan_set *set, const struct mcan_config *cfg)
 	    * (cfg->quanta_before_sp + cfg->quanta_after_sp));
 	if (regVal32 < 1 || regVal32 > 512)
 		return 3;
+
+	//compute_nbtp
+	uint32_t clocks_per_bit = DIV_ROUND(freq, cfg->bit_rate);
+	uint32_t clocks_to_sample = DIV_ROUND(clocks_per_bit * 7, 8);
+	uint32_t clocks_after_sample = clocks_per_bit - clocks_to_sample;
+	uint32_t divisor = max(DIV_ROUND_UP(clocks_to_sample, 256),
+							DIV_ROUND_UP(clocks_after_sample, 128));
+
+	uint32_t NTSEG1 = DIV_ROUND(clocks_to_sample, divisor) - 2;
+	uint32_t NTSEG2 = DIV_ROUND(clocks_after_sample, divisor) - 1;
+	uint32_t NBRP = divisor - 1;
+	uint32_t NSJW = DIV_ROUND(clocks_after_sample, divisor * 4);
 	/* Apply bit timing configuration */
-	mcan->NBTP.reg = CAN_NBTP_NBRP(regVal32 - 1)
-	    | CAN_NBTP_NTSEG1(cfg->quanta_before_sp - 1 - 1)
-	    | CAN_NBTP_NTSEG2(cfg->quanta_after_sp - 1)
-	    | CAN_NBTP_NSJW(cfg->quanta_sync_jump - 1);
+	mcan->NBTP.reg = CAN_NBTP_NBRP(NBRP)
+	    | CAN_NBTP_NTSEG1(NTSEG1)
+	    | CAN_NBTP_NTSEG2(NTSEG2)
+	    | CAN_NBTP_NSJW(NSJW);
+        
 
 	/* Configure fast CAN FD bit timing */
 	if (cfg->bit_rate_fd < cfg->bit_rate
@@ -273,7 +289,7 @@ uint8_t mcan_initialize(struct mcan_set *set, const struct mcan_config *cfg)
 	    | CAN_DBTP_DTSEG1(cfg->quanta_before_sp_fd - 1 - 1)
 	    | CAN_DBTP_DTSEG2(cfg->quanta_after_sp_fd - 1)
 	    | CAN_DBTP_DSJW(cfg->quanta_sync_jump_fd - 1);
-
+        
 	/* Configure Message RAM starting addresses and element count */
 	/* 11-bit Message ID Rx Filters */
 	mcan->SIDFC.reg =
