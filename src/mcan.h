@@ -89,7 +89,7 @@ extern "C" {
         (b) = _swp; } while (0)
 
 
-
+extern unsigned char flg_fd;
 /*----------------------------------------------------------------------------
  *         Definitions
  *----------------------------------------------------------------------------*/
@@ -156,6 +156,8 @@ struct mcan_config {
 
     uint32_t bit_rate;            /* requested CAN bit rate in CAN mode,
                                    * in bps */
+
+    uint8_t quanta_prescale;      /* Gclk divider for standard rate mode */
     uint16_t quanta_before_sp;    /* duration of the time segment before the
                                    * sample point (Sync_Seg + Prop_Seg +
                                    * Phase_Seg1), while in CAN mode,
@@ -166,6 +168,7 @@ struct mcan_config {
 
     uint32_t bit_rate_fd;         /* requested CAN bit rate in fast CAN FD
                                    * mode, in bps */
+    uint8_t quanta_prescale_fd;   /* Gclk divider for FD Bit Rate Switching */
     uint8_t quanta_before_sp_fd;  /* duration of the time segment before the
                                    * sample point (Sync_Seg + Prop_Seg +
                                    * Phase_Seg1), while in fast CAN FD mode,
@@ -386,7 +389,7 @@ void mcan_send_tx_buffer(struct mcan_set *set, uint8_t buf_idx);
  * \return Index of the assigned transmit buffer, part of the FIFO / queue.
  * Or 0xff if the TX FIFO / queue was full, or an error occurred.
  */
-uint8_t mcan_enqueue_outgoing_msg(struct mcan_set *set, uint32_t id,
+uint8_t mcan_enqueue_outgoing_msg(unsigned char fdf, struct mcan_set *set, uint32_t id,
                                   uint8_t len, const uint8_t *data);
 
 /**

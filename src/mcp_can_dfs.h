@@ -433,6 +433,20 @@
 #define MCP_16MHZ    1
 #define MCP_8MHZ     2
 
+#define CAN_125K_500K   1
+#define CAN_250K_500K   2
+#define CAN_250K_750K   3
+#define CAN_250K_1M     4
+#define CAN_250K_1M5    5
+#define CAN_250K_2M     6
+#define CAN_250K_3M     7
+#define CAN_250K_4M     8
+#define CAN_500K_1M     9
+#define CAN_500K_2M     10  
+#define CAN_500K_3M     11
+#define CAN_500K_4M     12
+#define CAN_1000K_4M    13
+    
 #define CAN_4K096BPS 4096
 #define CAN_5KBPS    5000
 #define CAN_10KBPS   10000
