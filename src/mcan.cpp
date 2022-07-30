@@ -54,7 +54,7 @@ Atmel's SAMC21 register definition include files have a different and peculiar s
 #include "mcan.h"
 //#include "pmc.h"
 
-#define __SYSTEM_CLOCK (48000000)
+#define __SYSTEM_CLOCK (100000000)
 
 #define pmc_get_gck_clock(id) __SYSTEM_CLOCK
 

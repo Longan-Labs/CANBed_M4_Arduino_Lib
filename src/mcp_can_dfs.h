@@ -446,6 +446,12 @@
 #define CAN_500K_3M     11
 #define CAN_500K_4M     12
 #define CAN_1000K_4M    13
+#define CAN_1000K_2M    14
+#define CAN_1000K_2M500K 15
+#define CAN_1000K_3M    16
+#define CAN_1000K_3M250K 17
+#define CAN_1000K_4M500K 18
+#define CAN_1000K_5M 19
     
 #define CAN_4K096BPS 4096
 #define CAN_5KBPS    5000

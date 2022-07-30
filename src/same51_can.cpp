@@ -6,8 +6,6 @@
 #include "same51_can.h"
 #include "Arduino.h"
 
-SAME51_CAN *same51_can_use_object[2];
-
 struct CanQuantaValues {
     uint32_t speed;
     uint8_t prescale;
@@ -44,9 +42,13 @@ static constexpr CanQuantaValues precalcQuantValues[] = {
     {CAN_500K_1M, 1, 150, 50, 3, 4, 19, 6, 3},
     {CAN_500K_2M, 1, 150, 50, 3, 2, 19, 6, 3},
     {CAN_500K_4M, 1, 150, 50, 3, 1, 19, 6, 3},
-    {CAN_1000K_4M, 1, 75, 25, 3, 1, 19, 6, 3},
-    {0}
-};
+    {CAN_1000K_2M, 1, 74, 25, 3, 2, 19, 6, 3},
+    {CAN_1000K_2M500K, 1, 74, 25, 3, 1, 30, 10, 3},
+    {CAN_1000K_3M250K, 1, 74, 25, 3, 7, 3, 1, 3},
+    {CAN_1000K_4M, 1, 74, 25, 3, 1, 19, 6, 3},
+    {CAN_1000K_4M500K, 1, 74, 25, 3, 4, 5, 1, 3},
+    {CAN_1000K_5M, 1, 74, 25, 3, 1, 15, 5, 3},
+    {0}};
 
 static constexpr CanQuantaValues defaultQuantValues = {
     speed: 0,
@@ -96,11 +98,6 @@ uint8_t SAME51_CAN::begin(uint8_t idmodeset, uint32_t speedset, enum mcan_can_mo
     _group = 0;
     _idmode = idmodeset;
     
-    if (_canid == ID_CAN0) {
-        same51_can_use_object[0] = this;
-    }
-    
-    
     if ((_canid != ID_CAN0)) {
         return CAN_FAIL;  // Don't know what this is
     }
@@ -136,8 +133,8 @@ uint8_t SAME51_CAN::begin(uint8_t idmodeset, uint32_t speedset, enum mcan_can_mo
         */
         bit_rate : speedset,
         quanta_prescale: quantValues.prescale,
-        quanta_before_sp : quantValues.before_sp + 2,   //10 + 2,
-        quanta_after_sp : quantValues.after_sp + 1,     //3 + 1,
+        quanta_before_sp : quantValues.before_sp,   //10 + 2,
+        quanta_after_sp : quantValues.after_sp,     //3 + 1,
 
         /*
         AT6493 (SAMC21 app note) 'fast' values were unhelpfully the same as normal speed; these are for double (1MBit)
@@ -145,11 +142,11 @@ uint8_t SAME51_CAN::begin(uint8_t idmodeset, uint32_t speedset, enum mcan_can_mo
         */
         bit_rate_fd : speedset,
         quanta_prescale_fd: quantValues.prescale_fd,
-        quanta_before_sp_fd : quantValues.before_sp_fd + 2,     //3,
-        quanta_after_sp_fd : quantValues.after_sp_fd + 1,       //1,
+        quanta_before_sp_fd : quantValues.before_sp_fd,     //3,
+        quanta_after_sp_fd : quantValues.after_sp_fd,       //1,
 
-        quanta_sync_jump : quantValues.sync_jump + 1,           //3 + 1,
-        quanta_sync_jump_fd : quantValues.sync_jump_fd + 1,     //3 + 1,
+        quanta_sync_jump : quantValues.sync_jump,           //3 + 1,
+        quanta_sync_jump_fd : quantValues.sync_jump_fd,     //3 + 1,
     };
     PORT->Group[_group].DIRSET.reg = (1 << _cantx);
     PORT->Group[_group].DIRCLR.reg = (1 << _canrx);
@@ -158,7 +155,7 @@ uint8_t SAME51_CAN::begin(uint8_t idmodeset, uint32_t speedset, enum mcan_can_mo
     PORT->Group[_group].PMUX[_cantx / 2].reg = PORT_PMUX_PMUXE(8 /* CAN0 I */) | PORT_PMUX_PMUXO(8 /* CAN0 I */); /* have to write odd and even at once */ //SAME51G19A appears to use 8
     switch (mcan_cfg.id) {
         case ID_CAN0:
-            GCLK->PCHCTRL[CAN0_GCLK_ID].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN_GCLK1; // SAMC21 was GCLK0/48MHz, on SAME51 (as conf.) GCLK1 is 48MHz
+            GCLK->PCHCTRL[CAN0_GCLK_ID].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN_GCLK2;
             MCLK->AHBMASK.reg |= MCLK_AHBMASK_CAN0;
             //NVIC_EnableIRQ(CAN0_IRQn);
             break;
@@ -208,16 +205,20 @@ uint8_t SAME51_CAN::begin_fd(uint8_t idmodeset, uint32_t speedset, enum mcan_can
 {
     uint8_t ret;
     
-    flg_fd = (canmode == MCAN_MODE_EXT_LEN_CONST_RATE);
+    flg_fd = (canmode == MCAN_MODE_EXT_LEN_CONST_RATE) || (canmode == MCAN_MODE_EXT_LEN_DUAL_RATE);
     
-    unsigned long speed1[14] = {0, 125000, 250000, 250000, 250000, 250000,
-                                   250000, 250000, 250000, 500000, 500000,
-                                   500000, 500000, 1000000,
+    static const unsigned long speed1[] = { 0,
+        125000, 
+        250000, 250000, 250000, 250000, 250000, 250000, 250000, 
+        500000, 500000, 500000, 500000, 
+        1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000,
                                };
         
-    unsigned long speed2[14] = {0, 500000, 500000, 750000, 1000000, 1500000,
-                                   2000000, 3000000, 4000000, 1000000, 2000000,
-                                   3000000, 4000000, 4000000,
+    static const unsigned long speed2[] = { 0, 
+        500000, 
+        500000, 750000, 1000000, 1500000, 2000000, 3000000, 4000000, 
+        1000000, 2000000, 3000000, 4000000, 
+        4000000, 2000000, 2500000, 3000000, 3250000, 4500000, 5000000
                                };
                                    
     unsigned long speedset1 = speed1[speedset];
@@ -230,11 +231,6 @@ uint8_t SAME51_CAN::begin_fd(uint8_t idmodeset, uint32_t speedset, enum mcan_can
     _canrx = 23;
     _group = 0;
     _idmode = idmodeset;
-    
-    if (_canid == ID_CAN0) {
-        same51_can_use_object[0] = this;
-    }
-    
     
     if ((_canid != ID_CAN0)) {
         return CAN_FAIL;  // Don't know what this is
@@ -274,8 +270,8 @@ uint8_t SAME51_CAN::begin_fd(uint8_t idmodeset, uint32_t speedset, enum mcan_can
 
         bit_rate : speedset1,
         quanta_prescale: quantValues.prescale,
-        quanta_before_sp : quantValues.before_sp + 2,   //10 + 2,
-        quanta_after_sp : quantValues.after_sp + 1,     //3 + 1,
+        quanta_before_sp : quantValues.before_sp,   //10 + 2,
+        quanta_after_sp : quantValues.after_sp,     //3 + 1,
 
         /*
         AT6493 (SAMC21 app note) 'fast' values were unhelpfully the same as normal speed; these are for double (1MBit)
@@ -283,11 +279,11 @@ uint8_t SAME51_CAN::begin_fd(uint8_t idmodeset, uint32_t speedset, enum mcan_can
         */
         bit_rate_fd : speedset2,
         quanta_prescale_fd: quantValues.prescale_fd,
-        quanta_before_sp_fd : quantValues.before_sp_fd + 2,     //3,
-        quanta_after_sp_fd : quantValues.after_sp_fd + 1,       //1,
+        quanta_before_sp_fd : quantValues.before_sp_fd,     //3,
+        quanta_after_sp_fd : quantValues.after_sp_fd,       //1,
 
-        quanta_sync_jump : quantValues.sync_jump + 1,           //3 + 1,
-        quanta_sync_jump_fd : quantValues.sync_jump_fd + 1,     //3 + 1,
+        quanta_sync_jump : quantValues.sync_jump,           //3 + 1,
+        quanta_sync_jump_fd : quantValues.sync_jump_fd,     //3 + 1,
     };
     PORT->Group[_group].DIRSET.reg = (1 << _cantx);
     PORT->Group[_group].DIRCLR.reg = (1 << _canrx);
@@ -296,7 +292,7 @@ uint8_t SAME51_CAN::begin_fd(uint8_t idmodeset, uint32_t speedset, enum mcan_can
     PORT->Group[_group].PMUX[_cantx / 2].reg = PORT_PMUX_PMUXE(8 /* CAN0 I */) | PORT_PMUX_PMUXO(8 /* CAN0 I */); /* have to write odd and even at once */ //SAME51G19A appears to use 8
     switch (mcan_cfg.id) {
         case ID_CAN0:
-            GCLK->PCHCTRL[CAN0_GCLK_ID].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN_GCLK1; // SAMC21 was GCLK0/48MHz, on SAME51 (as conf.) GCLK1 is 48MHz
+            GCLK->PCHCTRL[CAN0_GCLK_ID].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN_GCLK2;
             MCLK->AHBMASK.reg |= MCLK_AHBMASK_CAN0;
             //NVIC_EnableIRQ(CAN0_IRQn);
             break;
