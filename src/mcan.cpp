@@ -247,7 +247,7 @@ uint8_t mcan_initialize(struct mcan_set *set, const struct mcan_config *cfg)
 		return 2;
         
 	/* Retrieve the frequency of the CAN core clock i.e. the Generated Clock */
-	freq = pmc_get_gck_clock(cfg->id);          // 48Mhz
+	freq = pmc_get_gck_clock(cfg->id);
 
 	/* Compute the Nominal Baud Rate Prescaler */
 	if (cfg->quanta_prescale != 0)
