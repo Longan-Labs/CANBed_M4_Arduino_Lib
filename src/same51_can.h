@@ -82,6 +82,7 @@ public:
     */
 
     uint8_t begin(uint8_t idmodeset, uint32_t speedset, enum mcan_can_mode canmode);
+    uint8_t begin_fd(uint8_t idmodeset, uint32_t speedset, enum mcan_can_mode canmode);
     uint8_t init_Mask(uint8_t num, uint8_t ext, uint32_t ulData);              // Initilize Mask(s)
     uint8_t init_Mask(uint8_t num, uint32_t ulData);                          // Initilize Mask(s)
     uint8_t init_Filt(uint8_t num, uint8_t ext, uint32_t ulData);              // Initilize Filter(s)
@@ -89,6 +90,10 @@ public:
     uint8_t setMode(uint8_t opMode);                                        // Set operational mode
     uint8_t sendMsgBuf(uint32_t id, uint8_t ext, uint8_t len, uint8_t *buf);      // Send message to transmit buffer
     uint8_t sendMsgBuf(uint32_t id, uint8_t len, uint8_t *buf);
+    
+    uint8_t sendFdMsgBuf(uint32_t id, uint8_t ext, uint8_t len, uint8_t *buf);      // Send message to transmit buffer
+    uint8_t sendFdMsgBuf(uint32_t id, uint8_t len, uint8_t *buf);
+    
     uint8_t readMsgBuf(uint32_t *id, uint8_t *ext, uint8_t *len, uint8_t *buf);
     uint8_t readMsgBuf(uint32_t *id, uint8_t *len, uint8_t *buf);
     uint8_t checkReceive(void);
@@ -108,6 +113,7 @@ private:
     uint32_t mcan_msg_ram_size = ARRAY_SIZE(mcan_msg_ram);
     uint8_t _idmode;
     uint8_t _mode;
+    uint8_t _fdMode;
     uint8_t _cs;
     uint8_t _canid;
     uint8_t _cantx;

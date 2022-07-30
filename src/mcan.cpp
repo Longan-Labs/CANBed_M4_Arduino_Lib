@@ -50,11 +50,11 @@ Atmel's SAMC21 register definition include files have a different and peculiar s
  *----------------------------------------------------------------------------*/
 #include <sam.h>
 #include <stdbool.h>
-
+#include "Arduino.h"
 #include "mcan.h"
 //#include "pmc.h"
 
-#define __SYSTEM_CLOCK (48000000)
+#define __SYSTEM_CLOCK (100000000)
 
 #define pmc_get_gck_clock(id) __SYSTEM_CLOCK
 
@@ -195,6 +195,7 @@ bool mcan_configure_msg_ram(const struct mcan_config *cfg, uint32_t *size)
 	return configure_ram(&tmp_set, cfg, size);
 }
 
+unsigned char flg_fd = 0;
 uint8_t mcan_initialize(struct mcan_set *set, const struct mcan_config *cfg)
 {
 	assert(set);
@@ -244,19 +245,37 @@ uint8_t mcan_initialize(struct mcan_set *set, const struct mcan_config *cfg)
 	    || cfg->quanta_after_sp < 1 || cfg->quanta_after_sp > 128
 	    || cfg->quanta_sync_jump < 1 || cfg->quanta_sync_jump > 128)
 		return 2;
+        
 	/* Retrieve the frequency of the CAN core clock i.e. the Generated Clock */
 	freq = pmc_get_gck_clock(cfg->id);
+
 	/* Compute the Nominal Baud Rate Prescaler */
-	regVal32 = ROUND_INT_DIV(freq, cfg->bit_rate
-	    * (cfg->quanta_before_sp + cfg->quanta_after_sp));
+	if (cfg->quanta_prescale != 0)
+	{
+	    regVal32 = cfg->quanta_prescale;
+	} else {
+	    regVal32 = ROUND_INT_DIV(freq, cfg->bit_rate
+	        * (cfg->quanta_before_sp + cfg->quanta_after_sp));
+	}
+
 	if (regVal32 < 1 || regVal32 > 512)
 		return 3;
+    
 	/* Apply bit timing configuration */
 	mcan->NBTP.reg = CAN_NBTP_NBRP(regVal32 - 1)
 	    | CAN_NBTP_NTSEG1(cfg->quanta_before_sp - 1 - 1)
 	    | CAN_NBTP_NTSEG2(cfg->quanta_after_sp - 1)
 	    | CAN_NBTP_NSJW(cfg->quanta_sync_jump - 1);
 
+    unsigned long tmpp = CAN_NBTP_NBRP(regVal32 - 1)
+	    | CAN_NBTP_NTSEG1(cfg->quanta_before_sp - 1 - 1)
+	    | CAN_NBTP_NTSEG2(cfg->quanta_after_sp - 1)
+	    | CAN_NBTP_NSJW(cfg->quanta_sync_jump - 1);
+    
+    //Serial.print("flg_fd = ");
+    //Serial.println(flg_fd);
+    if(flg_fd)
+    {
 	/* Configure fast CAN FD bit timing */
 	if (cfg->bit_rate_fd < cfg->bit_rate
 	    || cfg->quanta_before_sp_fd < 3 || cfg->quanta_before_sp_fd > 33
@@ -264,15 +283,26 @@ uint8_t mcan_initialize(struct mcan_set *set, const struct mcan_config *cfg)
 	    || cfg->quanta_sync_jump_fd < 1 || cfg->quanta_sync_jump_fd > 8)
 		return 4;
 	/* Compute the Fast Baud Rate Prescaler */
-	regVal32 = ROUND_INT_DIV(freq, cfg->bit_rate_fd
-	    * (cfg->quanta_before_sp_fd + cfg->quanta_after_sp_fd));
+		if (cfg->quanta_prescale_fd != 0)
+		{
+			regVal32 = cfg->quanta_prescale_fd;
+		} else {
+		    regVal32 = ROUND_INT_DIV(freq, cfg->bit_rate_fd
+		        * (cfg->quanta_before_sp_fd + cfg->quanta_after_sp_fd));
+		}
+
 	if (regVal32 < 1 || regVal32 > 32)
+        {
 		return 5;
+        }
 	/* Apply bit timing configuration */
 	mcan->DBTP.reg = CAN_DBTP_DBRP(regVal32 - 1)
 	    | CAN_DBTP_DTSEG1(cfg->quanta_before_sp_fd - 1 - 1)
 	    | CAN_DBTP_DTSEG2(cfg->quanta_after_sp_fd - 1)
 	    | CAN_DBTP_DSJW(cfg->quanta_sync_jump_fd - 1);
+    }
+    //// Serial.print("DBTP = ");
+    //// Serial.println(tmpp, HEX);
 
 	/* Configure Message RAM starting addresses and element count */
 	/* 11-bit Message ID Rx Filters */
@@ -513,7 +543,7 @@ void mcan_send_tx_buffer(struct mcan_set *set, uint8_t buf_idx)
 		mcan->TXBAR.reg = (1 << buf_idx);
 }
 
-uint8_t mcan_enqueue_outgoing_msg(struct mcan_set *set, uint32_t id,
+uint8_t mcan_enqueue_outgoing_msg(unsigned char fdf, struct mcan_set *set, uint32_t id,
 			          uint8_t len, const uint8_t *data)
 {
 	assert(len <= set->cfg.buf_size_tx);
@@ -540,7 +570,9 @@ uint8_t mcan_enqueue_outgoing_msg(struct mcan_set *set, uint32_t id,
 		*pThisTxBuf++ = MCAN_RAM_BUF_ID_STD(id);
 	val = MCAN_RAM_BUF_MM(0) | MCAN_RAM_BUF_DLC((uint32_t)dlc);
 	if (mode == MCAN_MODE_EXT_LEN_CONST_RATE)
-		val |= MCAN_RAM_BUF_FDF;
+    {
+		if(flg_fd)val |= MCAN_RAM_BUF_FDF;
+    }
 	else if (mode == MCAN_MODE_EXT_LEN_DUAL_RATE)
 		val |= MCAN_RAM_BUF_FDF | MCAN_RAM_BUF_BRS;
 	*pThisTxBuf++ = val;

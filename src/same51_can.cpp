@@ -6,7 +6,73 @@
 #include "same51_can.h"
 #include "Arduino.h"
 
-SAME51_CAN *same51_can_use_object[2];
+struct CanQuantaValues {
+    uint32_t speed;
+    uint8_t prescale;
+    uint8_t before_sp;
+    uint8_t after_sp;
+    uint8_t sync_jump;
+
+    uint8_t prescale_fd;
+    uint8_t before_sp_fd;
+    uint8_t after_sp_fd;
+    uint8_t sync_jump_fd;
+};
+
+static constexpr CanQuantaValues precalcQuantValues[] = {
+    {CAN_5KBPS, 80, 188, 62, 3},
+    {CAN_10KBPS, 40, 188, 62, 3},
+    {CAN_20KBPS, 20, 188, 62, 3},
+    {CAN_31K25BPS, 10, 240, 80, 3},
+    {CAN_33K3BPS, 10, 225, 75, 3},
+    {CAN_40KBPS, 10, 188, 62, 3},
+    {CAN_50KBPS, 8, 188, 62, 3},
+    {CAN_80KBPS, 5, 188, 62, 3},
+    {CAN_100KBPS, 4, 188, 62, 3},
+    {CAN_125KBPS, 4, 150, 50, 3},
+    {CAN_200KBPS, 2, 188, 62, 3},
+    {CAN_250KBPS, 2, 150, 50, 3},
+    {CAN_500KBPS, 1, 150, 50, 3},
+    {CAN_1000KBPS, 1, 75, 25, 3},
+    {CAN_125K_500K, 4, 150, 50, 3, 5, 30, 10, 3},
+    {CAN_250K_500K, 2, 150, 50, 3, 5, 30, 10, 3},
+    {CAN_250K_1M, 2, 150, 50, 3, 4, 19, 6, 3},
+    {CAN_250K_2M, 2, 150, 50, 3, 2, 19, 6, 3},
+    {CAN_250K_4M, 2, 150, 50, 3, 1, 19, 6, 3},
+    {CAN_500K_1M, 1, 150, 50, 3, 4, 19, 6, 3},
+    {CAN_500K_2M, 1, 150, 50, 3, 2, 19, 6, 3},
+    {CAN_500K_4M, 1, 150, 50, 3, 1, 19, 6, 3},
+    {CAN_1000K_2M, 1, 74, 25, 3, 2, 19, 6, 3},
+    {CAN_1000K_2M500K, 1, 74, 25, 3, 1, 30, 10, 3},
+    {CAN_1000K_3M250K, 1, 74, 25, 3, 7, 3, 1, 3},
+    {CAN_1000K_4M, 1, 74, 25, 3, 1, 19, 6, 3},
+    {CAN_1000K_4M500K, 1, 74, 25, 3, 4, 5, 1, 3},
+    {CAN_1000K_5M, 1, 74, 25, 3, 1, 15, 5, 3},
+    {0}};
+
+static constexpr CanQuantaValues defaultQuantValues = {
+    speed: 0,
+    prescale: 0,
+    before_sp: 10 + 2,
+    after_sp: 3 + 1,
+    sync_jump: 3 + 1,
+    prescale_fd: 0,
+    before_sp_fd: 3,
+    after_sp_fd: 1,
+    sync_jump_fd: 3 + 1,
+};
+
+static inline const CanQuantaValues& findQuantValues(uint32_t speed)
+{
+    for(int idx = 0; precalcQuantValues[idx].speed != 0; idx++)
+    {
+        if (precalcQuantValues[idx].speed == speed)
+        {
+            return precalcQuantValues[idx];
+        }
+    }
+    return defaultQuantValues;
+}
 
 /**
 * @brief Starts Canbus communication using the supplied paramaters
@@ -20,6 +86,11 @@ uint8_t SAME51_CAN::begin(uint8_t idmodeset, uint32_t speedset, enum mcan_can_mo
 {
     uint8_t ret;
 
+    flg_fd = (canmode == MCAN_MODE_EXT_LEN_CONST_RATE);
+    
+    //Serial.print("flg_fd = ");
+    //Serial.println(flg_fd);
+
     rx_ded_buffer_data = false;
     _canid = ID_CAN0;
     _cantx = 22;
@@ -27,20 +98,13 @@ uint8_t SAME51_CAN::begin(uint8_t idmodeset, uint32_t speedset, enum mcan_can_mo
     _group = 0;
     _idmode = idmodeset;
     
-    if (_canid == ID_CAN0) {
-        same51_can_use_object[0] = this;
-    }
-    
-    
     if ((_canid != ID_CAN0)) {
         return CAN_FAIL;  // Don't know what this is
     }
+    const CanQuantaValues& quantValues = findQuantValues(speedset);
     const struct mcan_config mcan_cfg = {
-
-id :
-        _canid,
-regs :
-        ((_canid == ID_CAN0) ? CAN0 : CAN0),
+        id : _canid,
+        regs : CAN0,
         msg_ram :
         mcan_msg_ram,
 
@@ -67,22 +131,22 @@ regs :
         /*
         using values from AT6493 (SAMC21 app note); the plus values are to add on what the MCAN driver subtracts back off
         */
-        bit_rate :
-        speedset,
-        quanta_before_sp : 10 + 2,
-        quanta_after_sp : 3 + 1,
+        bit_rate : speedset,
+        quanta_prescale: quantValues.prescale,
+        quanta_before_sp : quantValues.before_sp,   //10 + 2,
+        quanta_after_sp : quantValues.after_sp,     //3 + 1,
 
         /*
         AT6493 (SAMC21 app note) 'fast' values were unhelpfully the same as normal speed; these are for double (1MBit)
                 the maximum peripheral clock of 48MHz on the SAMC21 does restrict us from very high rates
         */
-        bit_rate_fd :
-        speedset,
-        quanta_before_sp_fd : 10 + 2,
-        quanta_after_sp_fd : 3 + 1,
+        bit_rate_fd : speedset,
+        quanta_prescale_fd: quantValues.prescale_fd,
+        quanta_before_sp_fd : quantValues.before_sp_fd,     //3,
+        quanta_after_sp_fd : quantValues.after_sp_fd,       //1,
 
-        quanta_sync_jump : 3 + 1,
-        quanta_sync_jump_fd : 3 + 1,
+        quanta_sync_jump : quantValues.sync_jump,           //3 + 1,
+        quanta_sync_jump_fd : quantValues.sync_jump_fd,     //3 + 1,
     };
     PORT->Group[_group].DIRSET.reg = (1 << _cantx);
     PORT->Group[_group].DIRCLR.reg = (1 << _canrx);
@@ -91,7 +155,7 @@ regs :
     PORT->Group[_group].PMUX[_cantx / 2].reg = PORT_PMUX_PMUXE(8 /* CAN0 I */) | PORT_PMUX_PMUXO(8 /* CAN0 I */); /* have to write odd and even at once */ //SAME51G19A appears to use 8
     switch (mcan_cfg.id) {
         case ID_CAN0:
-            GCLK->PCHCTRL[CAN0_GCLK_ID].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN_GCLK1; // SAMC21 was GCLK0/48MHz, on SAME51 (as conf.) GCLK1 is 48MHz
+            GCLK->PCHCTRL[CAN0_GCLK_ID].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN_GCLK2;
             MCLK->AHBMASK.reg |= MCLK_AHBMASK_CAN0;
             //NVIC_EnableIRQ(CAN0_IRQn);
             break;
@@ -99,16 +163,16 @@ regs :
             break;
     }
     if (mcan_configure_msg_ram(&mcan_cfg, &mcan_msg_ram_size)) {
-        Serial.println("RAM configuration succeeded");
+        //// Serial.println("RAM configuration succeeded");
     } else {
         return CAN_FAIL;
     }
     ret = mcan_initialize(&mcan, &mcan_cfg);
     if (ret == 0) {
-        Serial.println("CAN initialized");
+        //// Serial.println("CAN initialized");
     } else {
-        Serial.print("CAN init failed, code ");
-        Serial.println(ret);
+        //// Serial.print("CAN init failed, code ");
+        //// Serial.println(ret);
         return CAN_FAIL;
     }
     mcan_set_tx_queue_mode(&mcan);
@@ -129,27 +193,53 @@ regs :
         init_Mask(FILTER_1, (CAN_STD_MSG_ID | MSG_ID_ALLOW_ALL_MASK));
     }
     if (mcan_is_enabled(&mcan)) {
-        Serial.println("MCAN is enabled!");
+        // Serial.println("MCAN is enabled!");
         return CAN_OK;
     }
-    Serial.println("Something went wrong!!!!!!!!");
+    // Serial.println("Something went wrong!!!!!!!!");
     return CAN_FAIL;
 };
 
-#if 0
-uint8_t SAME51_CAN::begin(uint8_t idmodeset, uint32_t speedset, uint8_t clockset)
+
+uint8_t SAME51_CAN::begin_fd(uint8_t idmodeset, uint32_t speedset, enum mcan_can_mode canmode)
 {
     uint8_t ret;
+    
+    flg_fd = (canmode == MCAN_MODE_EXT_LEN_CONST_RATE) || (canmode == MCAN_MODE_EXT_LEN_DUAL_RATE);
+    
+    static const unsigned long speed1[] = { 0,
+        125000, 
+        250000, 250000, 250000, 250000, 250000, 250000, 250000, 
+        500000, 500000, 500000, 500000, 
+        1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000,
+                               };
+        
+    static const unsigned long speed2[] = { 0, 
+        500000, 
+        500000, 750000, 1000000, 1500000, 2000000, 3000000, 4000000, 
+        1000000, 2000000, 3000000, 4000000, 
+        4000000, 2000000, 2500000, 3000000, 3250000, 4500000, 5000000
+                               };
+                                   
+    unsigned long speedset1 = speed1[speedset];
+    unsigned long speedset2 = speed2[speedset];
+        
+
+    rx_ded_buffer_data = false;
+    _canid = ID_CAN0;
+    _cantx = 22;
+    _canrx = 23;
+    _group = 0;
     _idmode = idmodeset;
+    
     if ((_canid != ID_CAN0)) {
         return CAN_FAIL;  // Don't know what this is
     }
+    const CanQuantaValues& quantValues = findQuantValues(speedset);
     const struct mcan_config mcan_cfg = {
 
-id :
-        _canid,
-regs :
-        ((_canid == ID_CAN0) ? CAN0 : CAN0),
+        id : _canid,
+        regs : CAN0,
         msg_ram :
         mcan_msg_ram,
 
@@ -176,22 +266,24 @@ regs :
         /*
         using values from AT6493 (SAMC21 app note); the plus values are to add on what the MCAN driver subtracts back off
         */
-        bit_rate :
-        speedset,
-        quanta_before_sp : 10 + 2,
-        quanta_after_sp : 3 + 1,
+        
+
+        bit_rate : speedset1,
+        quanta_prescale: quantValues.prescale,
+        quanta_before_sp : quantValues.before_sp,   //10 + 2,
+        quanta_after_sp : quantValues.after_sp,     //3 + 1,
 
         /*
         AT6493 (SAMC21 app note) 'fast' values were unhelpfully the same as normal speed; these are for double (1MBit)
                 the maximum peripheral clock of 48MHz on the SAMC21 does restrict us from very high rates
         */
-        bit_rate_fd :
-        speedset,
-        quanta_before_sp_fd : 10 + 2,
-        quanta_after_sp_fd : 3 + 1,
+        bit_rate_fd : speedset2,
+        quanta_prescale_fd: quantValues.prescale_fd,
+        quanta_before_sp_fd : quantValues.before_sp_fd,     //3,
+        quanta_after_sp_fd : quantValues.after_sp_fd,       //1,
 
-        quanta_sync_jump : 3 + 1,
-        quanta_sync_jump_fd : 3 + 1,
+        quanta_sync_jump : quantValues.sync_jump,           //3 + 1,
+        quanta_sync_jump_fd : quantValues.sync_jump_fd,     //3 + 1,
     };
     PORT->Group[_group].DIRSET.reg = (1 << _cantx);
     PORT->Group[_group].DIRCLR.reg = (1 << _canrx);
@@ -200,7 +292,7 @@ regs :
     PORT->Group[_group].PMUX[_cantx / 2].reg = PORT_PMUX_PMUXE(8 /* CAN0 I */) | PORT_PMUX_PMUXO(8 /* CAN0 I */); /* have to write odd and even at once */ //SAME51G19A appears to use 8
     switch (mcan_cfg.id) {
         case ID_CAN0:
-            GCLK->PCHCTRL[CAN0_GCLK_ID].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN_GCLK1; // SAMC21 was GCLK0/48MHz, on SAME51 (as conf.) GCLK1 is 48MHz
+            GCLK->PCHCTRL[CAN0_GCLK_ID].reg = GCLK_PCHCTRL_CHEN | GCLK_PCHCTRL_GEN_GCLK2;
             MCLK->AHBMASK.reg |= MCLK_AHBMASK_CAN0;
             //NVIC_EnableIRQ(CAN0_IRQn);
             break;
@@ -208,16 +300,16 @@ regs :
             break;
     }
     if (mcan_configure_msg_ram(&mcan_cfg, &mcan_msg_ram_size)) {
-        Serial.println("RAM configuration succeeded");
+        // Serial.println("RAM configuration succeeded");
     } else {
         return CAN_FAIL;
     }
     ret = mcan_initialize(&mcan, &mcan_cfg);
     if (ret == 0) {
-        Serial.println("CAN initialized");
+        // Serial.println("CAN initialized");
     } else {
-        Serial.print("CAN init failed, code ");
-        Serial.println(ret);
+        // Serial.print("CAN init failed, code ");
+        // Serial.println(ret);
         return CAN_FAIL;
     }
     mcan_set_tx_queue_mode(&mcan);
@@ -226,7 +318,7 @@ regs :
     } else {
         mcan_loopback_off(&mcan);
     }
-    mcan_set_mode(&mcan, MCAN_MODE_EXT_LEN_CONST_RATE);
+    mcan_set_mode(&mcan, canmode);
     mcan_enable(&mcan);
     // Enable chip standby
     //pinMode(_cs, OUTPUT);
@@ -238,13 +330,13 @@ regs :
         init_Mask(FILTER_1, (CAN_STD_MSG_ID | MSG_ID_ALLOW_ALL_MASK));
     }
     if (mcan_is_enabled(&mcan)) {
-        Serial.println("MCAN is enabled!");
+        // Serial.println("MCAN is enabled!");
         return CAN_OK;
     }
-    Serial.println("Something went wrong!!!!!!!!");
+    // Serial.println("Something went wrong!!!!!!!!");
     return CAN_FAIL;
-};
-#endif
+}
+
 
 uint8_t SAME51_CAN::init_Mask(uint8_t num, uint8_t ext, uint32_t ulData)
 {
@@ -326,7 +418,7 @@ uint8_t SAME51_CAN::sendMsgBuf(uint32_t id, uint8_t ext, uint8_t len, uint8_t *b
     if (ext) {
         id |= CAN_EXT_MSG_ID;
     }
-    ret = mcan_enqueue_outgoing_msg(&mcan, id, len, buf);
+    ret = mcan_enqueue_outgoing_msg(0, &mcan, id, len, buf);
     if (ret != 0xFF) {
         return CAN_OK;
     }
@@ -337,6 +429,27 @@ uint8_t SAME51_CAN::sendMsgBuf(uint32_t id, uint8_t len, uint8_t *buf)
 {
     return sendMsgBuf(id, 1, len, buf);
 };                 // Send message to transmit buffer
+
+uint8_t SAME51_CAN::sendFdMsgBuf(uint32_t id, uint8_t ext, uint8_t len, uint8_t *buf)
+{
+    uint8_t ret = 0xff;
+    if (!mcan_is_enabled(&mcan)) {
+        return CAN_CTRLERROR;
+    }
+    if (ext) {
+        id |= CAN_EXT_MSG_ID;
+    }
+    ret = mcan_enqueue_outgoing_msg(1, &mcan, id, len, buf);
+    if (ret != 0xFF) {
+        return CAN_OK;
+    }
+    return CAN_FAILTX;
+};      // Send message to transmit buffer
+
+uint8_t SAME51_CAN::sendFdMsgBuf(uint32_t id, uint8_t len, uint8_t *buf)
+{
+    return sendFdMsgBuf(id, 1, len, buf);
+};        
 
 uint8_t SAME51_CAN::readMsgBuf(uint32_t *id, uint8_t *ext, uint8_t *len, uint8_t *buf)
 {
@@ -401,11 +514,11 @@ uint8_t SAME51_CAN::disOneShotTX(void)
 /*
 void CAN0_Handler(void)
 {
-    Serial.println("A");
+    // Serial.println("A");
     if (mcan_rx_array_data(&(use_object->mcan))) {
         mcan_clear_rx_array_flag(&(use_object->mcan));
         use_object->rx_ded_buffer_data = true;
-        Serial.println("Got a Packet 0!");
+        // Serial.println("Got a Packet 0!");
     }
 }
 

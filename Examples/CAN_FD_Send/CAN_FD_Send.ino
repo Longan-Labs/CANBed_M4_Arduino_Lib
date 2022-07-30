@@ -1,5 +1,5 @@
 /*
-  CAN 2.0 send example for CANbed M4
+  CAN fd send example for CANbed M4
   
   begin(uint8_t idmodeset, uint32_t speedset, enum mcan_can_mode canmode)
   
@@ -12,21 +12,16 @@
 
   @speedset:
   
-  #define CAN_4K096BPS 4096
-  #define CAN_5KBPS    5000
-  #define CAN_10KBPS   10000
-  #define CAN_20KBPS   20000
-  #define CAN_31K25BPS 31250
-  #define CAN_33K3BPS  33300
-  #define CAN_40KBPS   40000
-  #define CAN_50KBPS   50000
-  #define CAN_80KBPS   80000
-  #define CAN_100KBPS  100000
-  #define CAN_125KBPS  125000
-  #define CAN_200KBPS  200000
-  #define CAN_250KBPS  250000
-  #define CAN_500KBPS  500000
-  #define CAN_1000KBPS 1000000
+  #define CAN_250K_500K
+  #define CAN_250K_1M
+  #define CAN_250K_1M5
+  #define CAN_250K_2M
+  #define CAN_500K_1M 
+  #define CAN_500K_2M
+  #define CAN_500K_4M
+  #define CAN_1000K_4M 
+  
+  Note: If you need other baudrate, please contact info@longan-labs.cc
   
   @canmode:
   
@@ -58,7 +53,7 @@ void setup()
     while(!Serial);
     
     uint8_t ret;
-    ret = can.begin(MCP_ANY, CAN_500KBPS, MCAN_MODE_EXT_LEN_CONST_RATE);
+    ret = can.begin_fd(MCP_ANY, CAN_500K_4M, MCAN_MODE_EXT_LEN_CONST_RATE);
     if (ret == CAN_OK) 
     {
         Serial.println("CAN Initialized Successfully!");
@@ -81,8 +76,8 @@ void loop()
     unsigned int id = 0x00;
     unsigned int ext = 0;       // 0 for standard frame, 1 for extend frame
     
-    can.sendMsgBuf(id, ext, len, dta);
-    
+    can.sendFdMsgBuf(id, ext, len, dta);
+    // can.sendMsgBuf(id, ext, 8, dta);         // you can send 2.0 frame under fd mode.
     delay(100);
 }
 
